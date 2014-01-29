@@ -21,10 +21,7 @@ module Mr
         full_reload_pattern = options[:full] || DEFAULT_FULL_RELOAD_PATTERN
         force_polling = options[:force_polling] || false
         @unicorn_args = unicorn_args
-        listener = Listen.to(Dir.pwd, :relative_paths=>true, :force_polling=>force_polling)
-        listener.filter(full_reload_pattern)
-        listener.filter(reload_pattern)
-        listener.change do |modified, added, removed|
+        listener = Listen.to(Dir.pwd, :relative_paths=>true, :force_polling=>force_polling) do |modified, added, removed|
           $stderr.puts "File change event detected: #{{modified: modified, added: added, removed: removed}.inspect}"
           if (modified + added + removed).index {|f| f =~ full_reload_pattern}
             # Reload everything.  Perhaps this could use the "procedure to
@@ -41,7 +38,9 @@ module Mr
             Process.kill(:HUP, @unicorn_pid)
           end
         end
-
+        
+        listener.only([full_reload_pattern, reload_pattern])
+        
         shutdown = lambda do |signal|
           listener.stop
           Process.kill(:TERM, @unicorn_pid)
