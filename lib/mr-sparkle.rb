@@ -4,7 +4,7 @@ require 'listen'
 module Mr
   module Sparkle
 
-    DEFAULT_RELOAD_PATTERN = /\.(?:builder|coffee|creole|css|erb|erubis|haml|html|js|less|liquid|mab|markdown|md|mdown|mediawiki|mkd|mw|nokogiri|radius|rb|rdoc|rhtml|ru|sass|scss|str|textile|txt|wiki|yajl|yml)$/
+    DEFAULT_RELOAD_PATTERN = /\.(?:builder|coffee|creole|css|slim|erb|erubis|haml|html|js|less|liquid|mab|markdown|md|mdown|mediawiki|mkd|mw|nokogiri|radius|rb|rdoc|rhtml|ru|sass|scss|str|textile|txt|wiki|yajl|yml)$/
 
     DEFAULT_FULL_RELOAD_PATTERN = /^Gemfile(?:\.lock)?$/
 
