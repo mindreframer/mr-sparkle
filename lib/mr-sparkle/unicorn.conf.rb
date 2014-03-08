@@ -1,4 +1,4 @@
-worker_processes Integer(ENV["WEB_CONCURRENCY"] || 3)
+worker_processes Integer(ENV["SPARKLE_WORKERS"] || 3)
 timeout Integer(ENV['SPARKLE_TIMEOUT'] || 60)
 
 GC.respond_to?(:copy_on_write_friendly=) and GC.copy_on_write_friendly = true
