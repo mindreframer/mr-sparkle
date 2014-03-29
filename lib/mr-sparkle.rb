@@ -13,6 +13,7 @@ module Mr
     #DEFAULT_RELOAD_PATTERN = /\.(?:builder|coffee|creole|css|slim|erb|erubis|haml|html|js|less|liquid|mab|markdown|md|mdown|mediawiki|mkd|mw|nokogiri|radius|rb|rdoc|rhtml|ru|sass|scss|str|textile|txt|wiki|yajl|yml)$/
 
     DEFAULT_FULL_RELOAD_PATTERN = /^Gemfile(?:\.lock)?$/
+    # TODO make configurable
     IGNORE_PATTERNS             = [/\.direnv/, /\.sass-cache/, /^tmp/]
 
     class Daemon
@@ -54,8 +55,7 @@ module Mr
         exit
       end
 
-      # Send a HUP to unicorn to tell it to gracefully shut down its
-      # workers
+      # tell unicorn to gracefully shut down workers
       def hup_unicorn
         log 'hupping #{unicorn_pid}'
         Process.kill(:HUP, unicorn_pid)
