@@ -9,46 +9,63 @@ module Mr
       nokogiri radius rb rdoc rhtml ru
       sass scss str textile txt wiki yajl yml
     ).sort
-    regex =
-    DEFAULT_RELOAD_PATTERN = %r(\.(?:builder #{extensions.join('|')})$)
-    #DEFAULT_RELOAD_PATTERN = /\.(?:builder coffee|creole|css|slim|erb|erubis|haml|html|js|less|liquid|mab|markdown|md|mdown|mediawiki|mkd|mw|nokogiri|radius|rb|rdoc|rhtml|ru|sass|scss|str|textile|txt|wiki|yajl|yml)$/
+    DEFAULT_RELOAD_PATTERN      = %r(\.(?:builder #{extensions.join('|')})$)
     DEFAULT_FULL_RELOAD_PATTERN = /^Gemfile(?:\.lock)?$/
 
     class Daemon
+      attr_accessor :options, :unicorn_args
+      attr_accessor :unicorn_pid
+
+      def initialize(options, unicorn_args)
+        @options, @unicorn_args = options, unicorn_args
+        options[:pattern]       ||= DEFAULT_RELOAD_PATTERN
+        options[:full]          ||= DEFAULT_FULL_RELOAD_PATTERN
+        options[:force_polling] ||= false
+        self
+      end
 
       def start_unicorn
-        @unicorn_pid = Kernel.spawn('unicorn', '-c', unicorn_config, *@unicorn_args)
+        @unicorn_pid = Kernel.spawn('unicorn', '-c', unicorn_config, *unicorn_args)
       end
 
       def unicorn_config
         File.expand_path('mr-sparkle/unicorn.conf.rb',File.dirname(__FILE__))
       end
 
-      def run(options, unicorn_args)
-        reload_pattern = options[:pattern] || DEFAULT_RELOAD_PATTERN
-        full_reload_pattern = options[:full] || DEFAULT_FULL_RELOAD_PATTERN
-        force_polling = options[:force_polling] || false
-        @unicorn_args = unicorn_args
-        listener = Listen.to(Dir.pwd, :relative_paths=>true, :force_polling=>force_polling) do |modified, added, removed|
-          $stderr.puts "File change event detected: #{{modified: modified, added: added, removed: removed}.inspect}"
-          if (modified + added + removed).index {|f| f =~ full_reload_pattern}
-            # Reload everything.  Perhaps this could use the "procedure to
-            # replace a running unicorn executable" described at:
-            # http://unicorn.bogomips.org/SIGNALS.html
-            # but one wouldn't expect this to be triggered all that much,
-            # and this is just way simpler for now.
-            Process.kill(:QUIT, @unicorn_pid)
-            Process.wait(@unicorn_pid)
-            start_unicorn
-          else
-            # Send a HUP to unicorn to tell it to gracefully shut down its
-            # workers
-            Process.kill(:HUP, @unicorn_pid)
-          end
+      # TODO maybe consider doing like: http://unicorn.bogomips.org/SIGNALS.html
+      def reload_everything
+        Process.kill(:QUIT, unicorn_pid)
+        Process.wait(unicorn_pid)
+        start_unicorn
+      end
+
+      # Send a HUP to unicorn to tell it to gracefully shut down its
+      # workers
+      def hup_unicorn
+        Process.kill(:HUP, unicorn_pid)
+      end
+
+      def handle_change(modified, added, removed)
+        $stderr.puts "File change event detected: #{{modified: modified, added: added, removed: removed}.inspect}"
+        if (modified + added + removed).index {|f| f =~ full_reload_pattern}
+          reload_everything
+        else
+          hup_unicorn
         end
+      end
 
-        listener.only([full_reload_pattern, reload_pattern])
+      def listener
+        @listener ||= begin
+          x = Listen.to(Dir.pwd, :relative_paths=>true, :force_polling=> options[:force_polling]) do |modified, added, removed|
+            handle_change(modified, added, removed)
+          end
 
+          x.only([ options[:pattern], options[:full] ])
+          x
+        end
+      end
+
+      def run
         shutdown = lambda do |signal|
           listener.stop
           Process.kill(:TERM, @unicorn_pid)
@@ -57,17 +74,7 @@ module Mr
         end
         Signal.trap(:INT, &shutdown)
         Signal.trap(:EXIT, &shutdown)
-
-        # Ideally we would start the listener in a blocking mode and have it
-        # just work.  But unfortunately listener.stop will not work from a
-        # signal on the same thread the listener is running.
-        # So we need to start it in the background, then keep this thread
-        # alive just so it can wait to be interrupted.
         listener.start
-        # Theoretically, we could have problems if a file changed RIGHT AT
-        # THIS POINT, between the time we started the listener and the time
-        # we started the unicorn process.  But this is just for development,
-        # so we're just not going to worry about that.
         start_unicorn
 
         # And now we just want to keep the thread alive--we're just waiting around to get interrupted at this point.
@@ -75,6 +82,5 @@ module Mr
       end
 
     end
-
   end
 end
