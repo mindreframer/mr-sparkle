@@ -10,7 +10,10 @@ module Mr
       sass scss str textile txt wiki yajl yml
     ).sort
     DEFAULT_RELOAD_PATTERN      = %r(\.(?:builder #{extensions.join('|')})$)
+    #DEFAULT_RELOAD_PATTERN = /\.(?:builder|coffee|creole|css|slim|erb|erubis|haml|html|js|less|liquid|mab|markdown|md|mdown|mediawiki|mkd|mw|nokogiri|radius|rb|rdoc|rhtml|ru|sass|scss|str|textile|txt|wiki|yajl|yml)$/
+
     DEFAULT_FULL_RELOAD_PATTERN = /^Gemfile(?:\.lock)?$/
+    IGNORE_PATTERNS             = [/\.direnv/, /\.sass-cache/, /^tmp/]
 
     class Daemon
       attr_accessor :options, :unicorn_args
@@ -24,6 +27,10 @@ module Mr
         self
       end
 
+      def log(msg)
+        $stderr.puts msg
+      end
+
       def start_unicorn
         @unicorn_pid = Kernel.spawn('unicorn', '-c', unicorn_config, *unicorn_args)
       end
@@ -34,20 +41,29 @@ module Mr
 
       # TODO maybe consider doing like: http://unicorn.bogomips.org/SIGNALS.html
       def reload_everything
+        log 'reloading everything'
         Process.kill(:QUIT, unicorn_pid)
         Process.wait(unicorn_pid)
         start_unicorn
       end
 
+      def shutdown
+        listener.stop
+        Process.kill(:TERM, unicorn_pid)
+        Process.wait(unicorn_pid)
+        exit
+      end
+
       # Send a HUP to unicorn to tell it to gracefully shut down its
       # workers
       def hup_unicorn
+        log 'hupping #{unicorn_pid}'
         Process.kill(:HUP, unicorn_pid)
       end
 
       def handle_change(modified, added, removed)
-        $stderr.puts "File change event detected: #{{modified: modified, added: added, removed: removed}.inspect}"
-        if (modified + added + removed).index {|f| f =~ full_reload_pattern}
+        log "File change event detected: #{{modified: modified, added: added, removed: removed}.inspect}"
+        if (modified + added + removed).index {|f| f =~ options[:full]}
           reload_everything
         else
           hup_unicorn
@@ -61,19 +77,15 @@ module Mr
           end
 
           x.only([ options[:pattern], options[:full] ])
+          IGNORE_PATTERNS.map{|ptrn| x.ignore(ptrn) }
           x
         end
       end
 
       def run
-        shutdown = lambda do |signal|
-          listener.stop
-          Process.kill(:TERM, @unicorn_pid)
-          Process.wait(@unicorn_pid)
-          exit
-        end
-        Signal.trap(:INT, &shutdown)
-        Signal.trap(:EXIT, &shutdown)
+        that = self
+        Signal.trap("INT") { |signo| that.shutdown }
+        Signal.trap("EXIT") { |signo| that.shutdown }
         listener.start
         start_unicorn
 
