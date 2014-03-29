@@ -3,17 +3,25 @@ require 'listen'
 
 module Mr
   module Sparkle
-
-    DEFAULT_RELOAD_PATTERN = /\.(?:builder|coffee|creole|css|slim|erb|erubis|haml|html|js|less|liquid|mab|markdown|md|mdown|mediawiki|mkd|mw|nokogiri|radius|rb|rdoc|rhtml|ru|sass|scss|str|textile|txt|wiki|yajl|yml)$/
-
+    extensions = %w(
+      builder coffee creole css slim erb erubis
+      haml html js less liquid mab markdown md mdown mediawiki mkd mw
+      nokogiri radius rb rdoc rhtml ru
+      sass scss str textile txt wiki yajl yml
+    ).sort
+    regex =
+    DEFAULT_RELOAD_PATTERN = %r(\.(?:builder #{extensions.join('|')})$)
+    #DEFAULT_RELOAD_PATTERN = /\.(?:builder coffee|creole|css|slim|erb|erubis|haml|html|js|less|liquid|mab|markdown|md|mdown|mediawiki|mkd|mw|nokogiri|radius|rb|rdoc|rhtml|ru|sass|scss|str|textile|txt|wiki|yajl|yml)$/
     DEFAULT_FULL_RELOAD_PATTERN = /^Gemfile(?:\.lock)?$/
 
     class Daemon
 
       def start_unicorn
-        @unicorn_pid = Kernel.spawn('unicorn', '-c',
-          File.expand_path('mr-sparkle/unicorn.conf.rb',File.dirname(__FILE__)),
-          *@unicorn_args)
+        @unicorn_pid = Kernel.spawn('unicorn', '-c', unicorn_config, *@unicorn_args)
+      end
+
+      def unicorn_config
+        File.expand_path('mr-sparkle/unicorn.conf.rb',File.dirname(__FILE__))
       end
 
       def run(options, unicorn_args)
@@ -38,9 +46,9 @@ module Mr
             Process.kill(:HUP, @unicorn_pid)
           end
         end
-        
+
         listener.only([full_reload_pattern, reload_pattern])
-        
+
         shutdown = lambda do |signal|
           listener.stop
           Process.kill(:TERM, @unicorn_pid)
@@ -49,7 +57,7 @@ module Mr
         end
         Signal.trap(:INT, &shutdown)
         Signal.trap(:EXIT, &shutdown)
-        
+
         # Ideally we would start the listener in a blocking mode and have it
         # just work.  But unfortunately listener.stop will not work from a
         # signal on the same thread the listener is running.
