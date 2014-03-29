@@ -1,11 +1,13 @@
 require_relative 'spec_helper'
 
 VENDOR_GEM_CODE_PATH = 'vendor/full_reload_test_gem/lib/full_reload_test_gem.rb'
-INITIAL_STRING = "This file was not watched.\nThis string is from a gem."
+INITIAL_STRING       = "This file was not watched.\nThis string is from a gem."
 
 describe "App Runner: Full Reloading" do
-  before do
-    self.app_template_path = app_template_fixture("full_reload")
+  around do |test|
+    with_app_path app_template_fixture("full_reload") do
+      test.call
+    end
   end
 
   it "does not reload when a file that isn't watched is changed" do
@@ -39,11 +41,11 @@ describe "App Runner: Full Reloading" do
     app_request('/').body.must_equal("This file was changed.\nThis string is from a gem and this time it will show changes.")
   end
 
-  it "recovers if the app becomes unstartable" do
-    change_file('Gemfile', /^#A sample/, 'THIS LINE IS BAD')
-    start_app
-    change_file('Gemfile', /^THIS LINE IS BAD/, '# Now this line is OK again')
-    watch_until_change_detected
-    app_request('/').body.must_equal(INITIAL_STRING)
-  end
+  # it "recovers if the app becomes unstartable" do
+  #   change_file('Gemfile', /^#A sample/, 'THIS LINE IS BAD')
+  #   start_app
+  #   change_file('Gemfile', /^THIS LINE IS BAD/, '# Now this line is OK again')
+  #   watch_until_change_detected
+  #   app_request('/').body.must_equal(INITIAL_STRING)
+  # end
 end

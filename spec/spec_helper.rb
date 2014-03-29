@@ -1,10 +1,12 @@
 require 'minitest/autorun'
 require 'minitest/reporters'
-require 'minitest/around'
+#require 'minitest/around'
+require 'minitest/around/spec'
 require 'net/http'
 require 'tmpdir'
 require 'timeout'
 require 'bundler'
+require 'debugger'
 
 MiniTest::Reporters.use! MiniTest::Reporters::SpecReporter.new
 
@@ -48,7 +50,7 @@ class ServerAppTest < MiniTest::Spec
       # Need to generate the right Gemfile.lock so that we don't generate it
       # from the app itself, creating spurious reload events
       unless File.exists?(File.expand_path('Gemfile.lock', running_app_dir))
-        Kernel.system('bundle install --local', chdir: running_app_dir, 
+        Kernel.system('bundle install --local', chdir: running_app_dir,
           in: '/dev/null', out: '/dev/null', err: '/dev/null')
       end
       @app_pid = Kernel.spawn(
@@ -58,7 +60,7 @@ class ServerAppTest < MiniTest::Spec
       app_stdout_w.close
       app_stderr_w.close
     end
-    
+
     @old_handler = Signal.trap(:EXIT) do
       stop_app
       @old_handler.call if @old_handler
@@ -95,7 +97,7 @@ class ServerAppTest < MiniTest::Spec
       Process.wait(@app_pid)
       @app_pid = nil
     end
-    
+
     Signal.trap(:EXIT, @old_handler) if @old_handler
     @old_handler = nil
   end
@@ -107,17 +109,16 @@ class ServerAppTest < MiniTest::Spec
   end
 
   def watch_until_change_detected(&block)
-    watch_until do |line| 
+    watch_until do |line|
       /^File change event detected/.match(line) && (block.nil? || block.call(line))
     end
     # It won't really serve the new version until it starts its new worker process
     watch_until {|line| /worker=\d+ ready/.match(line)}
   end
 
-  def around
-    raise "Must set @app_template_path" if @app_template_path.nil?
+  def with_app_path(app_path, &block)
     Dir.mktmpdir do |dir|
-      FileUtils.cp_r("#{app_template_path}/.", dir)
+      FileUtils.cp_r("#{app_path}/.", dir)
       @running_app_dir = dir
       begin
         yield
@@ -138,7 +139,7 @@ class ServerAppTest < MiniTest::Spec
       end
     end
   end
-  
+
 end
 
 MiniTest::Spec.register_spec_type(/^App Runner:/, ServerAppTest)
