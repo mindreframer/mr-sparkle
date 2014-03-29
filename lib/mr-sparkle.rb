@@ -57,7 +57,7 @@ module Mr
 
       # tell unicorn to gracefully shut down workers
       def hup_unicorn
-        log 'hupping #{unicorn_pid}'
+        log "hupping #{unicorn_pid}"
         Process.kill(:HUP, unicorn_pid)
       end
 
