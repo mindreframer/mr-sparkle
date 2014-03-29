@@ -1,6 +1,5 @@
 require 'minitest/autorun'
 require 'minitest/reporters'
-#require 'minitest/around'
 require 'minitest/around/spec'
 require 'net/http'
 require 'tmpdir'
